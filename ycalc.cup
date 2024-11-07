@@ -1,0 +1,220 @@
+/*
+  File Name: ycalc.cup
+  To Create: > java java_cup.Main < ycalc.cup
+	     >en windows java -jar java-cup-11.jar ycalc-cup
+*/
+   
+   
+/* ----------------------Preliminary Declarations Section--------------------*/
+   
+import java_cup.runtime.*;
+import java.util.*;
+   
+parser code {:
+    public static TablaSimbolo tabla = new TablaSimbolo();
+    public static ArrayList<Codigo3D> lista3d = new ArrayList<Codigo3D>();
+    // Método para reportar errores
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer("Error");
+        if (info instanceof java_cup.runtime.Symbol) {
+            java_cup.runtime.Symbol s = (java_cup.runtime.Symbol) info;
+            if (s.left >= 0) m.append(" in line " + (s.left + 1));
+            if (s.right >= 0) m.append(", column " + (s.right + 1));
+        }
+        m.append(" : " + message);
+        System.err.println(m);
+    }
+
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+        System.exit(1);  // Terminar la ejecución
+    }
+:};
+
+
+
+   
+/* ------------Declaration of Terminals and Non Terminals Section----------- */
+   
+
+terminal           SEMI, PLUS, AND, OR, TIMES, LPAREN, RPAREN, ASSIGN, TRUE, FALSE, RETURN, MAIN;
+terminal           INT, BOOLEAN, VOID, LBRACE, RBRACE;
+terminal           Integer NUMBER;
+terminal           String ID;   
+
+non terminal     Arbol expr_list, expr_part;
+non terminal     Arbol expr, prog;
+non terminal     Tipos TIPO;
+   
+
+/* -------------Precedence and Associatively of Terminals Section----------- */
+   
+/*
+  Precedence of non terminals could be defined here.  If you do define
+  precedence here you won't need to worry about precedence in the
+  Grammar Section, i.e. that TIMES should have a higher precedence
+  than PLUS.
+  
+  The precedence defined here would look something like this where the
+  lower line always will have higher precedence than the line before it.
+*/   
+  precedence left OR;
+  precedence left AND;
+  precedence left PLUS; 
+  precedence left TIMES;
+/* ----------------------------Grammar Section-------------------- */
+   
+
+   prog   ::= TIPO MAIN LPAREN RPAREN LBRACE expr_list:e RBRACE
+	        {: 
+          System.out.println("Tabla de Simbolos\n"+parser.tabla);
+          System.out.println("PseudoAssembler");
+          for(Codigo3D secuencia: parser.lista3d){
+            System.out.println(secuencia);
+          }
+
+          /*
+             generar el asambler desde aca. Se recorre y muestra por consola al igual que el C3D de forma iterativa.
+             Estas instrucciones solo se ejecutan una vez, definiendo el offset:
+
+             Al Simbolo hay que agregar una etiqueta llamada 'offSet'
+
+             Implementacion:
+          */
+/*
+        String Assembler;
+        for(){Codigo3D secuencia: parser.lista3d)
+            System.out.println("pushq   %rbp        ;");
+            System.out.println("movq    %rsp, %rbp  ;");
+            System.out.println(secuencia);
+
+            if(Secuencia.)
+
+
+            System.out.println("popq    %rbp            ;");
+            System.out.println("ret                     ; );
+        }
+*/
+
+    Simbolo temp = new Simbolo(Etiqueta.PROGRAMA);
+    parser.lista3d.add(new Codigo3D(Etiqueta.PROGRAMA,e.getInfo(),null,temp));
+		RESULT = new Arbol(temp,e, null); :}
+            ;
+   TIPO ::= INT {: RESULT = Tipos.INT; :}
+            |
+            BOOLEAN {: RESULT = Tipos.BOOL; :}
+            |
+            VOID {: RESULT = Tipos.NOTTYPE; :}
+   ;
+   expr_list ::= expr_list:el expr_part:ep {: 
+                  RESULT = new Arbol(new Simbolo(Etiqueta.DECLS), el, ep); :}
+                 | expr_part:ep {: RESULT = ep;
+   :}
+   ;
+   
+   expr_part ::= TIPO:t ID:id SEMI 
+              {: Simbolo simbolo = new Simbolo(Etiqueta.VARIABLE, id, t, 0, idleft);
+                 Simbolo resultado = parser.tabla.insertar(simbolo);
+                 if (resultado == null) {
+                  parser.report_fatal_error("Variable ya declarada: " + id + " (Línea " + idleft + ").\n", null);
+                 }
+                  Simbolo temp = new Simbolo(Etiqueta.DECLARACION);
+                  parser.lista3d.add(new Codigo3D(Etiqueta.DECLARACION,new Arbol(simbolo).getInfo(),null,temp));
+                  RESULT = new Arbol(temp, new Arbol(simbolo), null);
+                 
+			  :}
+                | ID:id ASSIGN expr:e SEMI 
+              {: Simbolo simbolo = parser.tabla.buscar(id); 
+                 if (simbolo==null){ 
+                  parser.report_fatal_error("Variable no declarada: " + id + " (Línea " + idleft + ").\n", null);                                                
+                 } 
+                 else {
+        
+                    Tipos tipoExpresion = e.getInfo().getTipo();
+                    if (simbolo.getTipo() == Tipos.NOTTYPE) {
+                        parser.tabla.actualizarTipo(id, tipoExpresion);
+                        simbolo.setTipo(tipoExpresion);
+                    }
+                    else if (simbolo.getTipo() != tipoExpresion) {
+                        parser.report_fatal_error("Tipos incompatibles en la asignación: variable " + id + " es de tipo " + simbolo.getTipo() + " pero se le asigna un valor de tipo " + tipoExpresion + ".\n", null);
+                    }
+                    simbolo.setValor(e.getInfo().getValor());
+                    Simbolo temp = new Simbolo(Etiqueta.ASIGNACION);
+                    parser.lista3d.add(new Codigo3D(Etiqueta.ASIGNACION,new Arbol(simbolo).getInfo(),e.getInfo(),temp));
+                    RESULT = new Arbol(temp, new Arbol(simbolo), e);
+                }
+            :}
+		            | RETURN expr:e SEMI 
+              {: System.out.println("resultado:"+e.getInfo().getValor());
+                  Simbolo temp = new Simbolo(Etiqueta.RETURN);
+                  parser.lista3d.add(new Codigo3D(Etiqueta.RETURN,null,e.getInfo(),temp));
+                  RESULT = new Arbol(temp,null,e);
+              :}
+                    | RETURN SEMI
+              {: 
+                  Simbolo temp = new Simbolo(Etiqueta.RETURN);
+                  parser.lista3d.add(new Codigo3D(Etiqueta.RETURN,null,null,temp));
+                  RESULT = new Arbol(temp,null,null);
+              :}
+              ;
+
+   
+   expr      ::= expr:e1 PLUS:p expr:e2
+    {:
+         if (e1.getInfo().getTipo() != Tipos.INT || e2.getInfo().getTipo() != Tipos.INT) {
+             parser.report_fatal_error("Tipos incompatibles en suma (se esperaba INT): " + e1.getInfo().getTipo() + " y " + e2.getInfo().getTipo() + ".\n", null);
+         }
+         Simbolo temp = new Simbolo(Etiqueta.SUMA,"+",Tipos.INT,e1.getInfo().getValor()+e2.getInfo().getValor(),pleft);
+         parser.lista3d.add(new Codigo3D(Etiqueta.SUMA,e1.getInfo(),e2.getInfo(),temp));
+         RESULT = new Arbol(temp, e1, e2);
+    :}
+        | expr:e1 TIMES:t expr:e2
+      	{: if (e1.getInfo().getTipo() != Tipos.INT || e2.getInfo().getTipo() != Tipos.INT) {
+            parser.report_fatal_error("Tipos incompatibles en multiplicación (se esperaba INT): " + e1.getInfo().getTipo() + " y " + e2.getInfo().getTipo() + ".\n", null);
+        }
+        Simbolo temp = new Simbolo(Etiqueta.MULT,"*",Tipos.INT,e1.getInfo().getValor()*e2.getInfo().getValor(),tleft);
+        parser.lista3d.add(new Codigo3D(Etiqueta.MULT,e1.getInfo(),e2.getInfo(),temp));
+        RESULT = new Arbol(temp, e1, e2);
+
+        :}
+        | expr:e1 AND:a expr:e2
+ {:
+        if (e1.getInfo().getTipo() != Tipos.BOOL || e2.getInfo().getTipo() != Tipos.BOOL) {
+            parser.report_fatal_error("Tipos incompatibles en AND (se esperaba BOOLEAN): " + e1.getInfo().getTipo() + " y " + e2.getInfo().getTipo() + ".\n", null);
+        }
+
+        Simbolo temp = new Simbolo(Etiqueta.AND,"&&",Tipos.BOOL,e1.getInfo().getValor() * e2.getInfo().getValor() ==1 ? 1 : 0 ,aleft);
+        parser.lista3d.add(new Codigo3D(Etiqueta.AND,e1.getInfo(),e2.getInfo(),temp));
+        RESULT = new Arbol(temp, e1, e2);
+ :}
+
+        | expr:e1 OR:o expr:e2
+ {:
+        if (e1.getInfo().getTipo() != Tipos.BOOL || e2.getInfo().getTipo() != Tipos.BOOL) {
+              parser.report_fatal_error("Tipos incompatibles en OR (se esperaba BOOLEAN): " + e1.getInfo().getTipo() + " y " + e2.getInfo().getTipo() + ".\n", null);
+        }
+
+        //Crear c3d y almacenarlo para mostrarlo en orden
+        Simbolo temp = new Simbolo(Etiqueta.OR,"||",Tipos.BOOL,(e1.getInfo().getValor() + e2.getInfo().getValor() >=1 ? 1 : 0 ),oleft);
+        parser.lista3d.add(new Codigo3D(Etiqueta.OR,e1.getInfo(),e2.getInfo(),temp));
+        RESULT = new Arbol(temp, e1, e2);
+ :} 
+               | LPAREN expr:e RPAREN
+         {: RESULT = e; :}
+               | TRUE:verdad
+	     {: RESULT = new Arbol(new Simbolo(Etiqueta.VALORBOOLEANO,"",Tipos.BOOL,1,verdadleft)); :}                 
+	           | FALSE:falso
+	     {: RESULT = new Arbol(new Simbolo(Etiqueta.VALORBOOLEANO,"",Tipos.BOOL,0,falsoleft));  :} 
+               | NUMBER:num
+         {: RESULT = new Arbol(new Simbolo(Etiqueta.VALORENTERO,"",Tipos.INT,num,numleft));     :}
+               | ID:id
+         {:
+                Simbolo simbolo = parser.tabla.buscar(id); 
+                if (simbolo==null){
+                        parser.report_fatal_error("Variable no declarada: " + id + " (Linea " + idleft + ").\n", null);
+                }
+                else{
+		                RESULT = new Arbol(simbolo);
+                }
+        :}
+;
